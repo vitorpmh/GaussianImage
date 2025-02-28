@@ -28,6 +28,8 @@ class GaussianImage_RS(nn.Module):
         self.register_buffer('_opacity', torch.ones((self.init_num_points, 1)))
         self._rotation = nn.Parameter(torch.rand(self.init_num_points, 1))
         self._features_dc = nn.Parameter(torch.rand(self.init_num_points, 3))
+        self.register_buffer('scaling_inc', torch.ones((self.init_num_points, 2)))
+        self.register_buffer('rotation_inc', torch.zeros((self.init_num_points, 1)))
 
         self.last_size = (self.H, self.W)
         self.background = torch.ones(3, device=self.device)
@@ -72,7 +74,8 @@ class GaussianImage_RS(nn.Module):
         return self._opacity 
     
     def forward(self):
-        self.xys, depths, self.radii, conics, num_tiles_hit = project_gaussians_2d_scale_rot(self.get_xyz, self.get_scaling, self.get_rotation, self.H, self.W, self.tile_bounds)
+        #self.xys, depths, self.radii, conics, num_tiles_hit = project_gaussians_2d_scale_rot(self.get_xyz, self.get_scaling, self.get_rotation, self.H, self.W, self.tile_bounds)
+        self.xys, depths, self.radii, conics, num_tiles_hit = project_gaussians_2d_scale_rot(self.get_xyz, self.get_scaling * self.scaling_inc, self.get_rotation + self.rotation_inc, self.H, self.W, self.tile_bounds)
         out_img = rasterize_gaussians_sum(self.xys, depths, self.radii, conics, num_tiles_hit,
                 self.get_features, self.get_opacity, self.H, self.W, self.BLOCK_H, self.BLOCK_W, background=self.background, return_alpha=False)
         out_img = torch.clamp(out_img, 0, 1) #[H, W, 3]
@@ -271,4 +274,3 @@ class GaussianImage_RS(nn.Module):
         return {"bpp": bpp, "position_bpp": position_bpp, 
             "cholesky_bpp": cholesky_bpp, "feature_dc_bpp": feature_dc_bpp, "scaling_bpp": scaling_bpp,
             "rotation_bpp": rotation_bpp}
-

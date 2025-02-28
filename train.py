@@ -45,7 +45,7 @@ class SimpleTrainer2d:
         elif model_name == "GaussianImage_RS":
             from gaussianimage_rs import GaussianImage_RS
             self.gaussian_model = GaussianImage_RS(loss_type="L2", opt_type="adan", num_points=self.num_points, H=self.H, W=self.W, BLOCK_H=BLOCK_H, BLOCK_W=BLOCK_W, 
-                device=self.device, lr=args.lr, quantize=False).to(self.device) 
+                device=self.device, lr=args.lr, quantize=False).to(self.device)
 
         elif model_name == "3DGS":
             from gaussiansplatting_3d import Gaussian3D
@@ -92,7 +92,7 @@ class SimpleTrainer2d:
         "psnr": psnr_value, "ms-ssim": ms_ssim_value, "rendering_time": test_end_time, "rendering_fps": 1/test_end_time})
         return psnr_value, ms_ssim_value, end_time, test_end_time, 1/test_end_time
 
-    def test(self):
+    def test(self, output_name = None):
         self.gaussian_model.eval()
         with torch.no_grad():
             out = self.gaussian_model()
@@ -103,7 +103,10 @@ class SimpleTrainer2d:
         if self.save_imgs:
             transform = transforms.ToPILImage()
             img = transform(out["render"].float().squeeze(0))
-            name = self.image_name + "_fitting.png" 
+            if output_name is None:
+                name = self.image_name + "_fitting.png" 
+            else:
+                name = output_name
             img.save(str(self.log_dir / name))
         return psnr, ms_ssim_value
 

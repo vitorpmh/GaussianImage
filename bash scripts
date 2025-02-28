@@ -1,0 +1,13 @@
+python train_custom_image_no_warp.py -d /home/vitor/Documents/doc/GaussianImage/dataset/neutral_front --data_name frll_neutral_front --model_name GaussianImage_Cholesky --num_points 30000 --iterations 50000 --save_imgs
+
+
+
+
+
+
+
+python train_custom_image_warping.py -d /home/vitor/Documents/doc/GaussianImage/dataset/neutral_front --data_name frll_neutral_front --model_name GaussianImage_RS --num_points 30000 --iterations 50000 --save_imgs --model_path /home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/gaussian_model.pth.tar
+
+
+
+ffmpeg -framerate 12 -i /home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/video/gaussian_model_%03d.png -c:v mpeg4 -pix_fmt yuv420p output_video.mp4

@@ -1,0 +1,13 @@
+*.png
+*.tar
+*.pyc
+*.txt
+*.mp4
+*.log
+*.npy
+*.jpg
+*.tem
+*.pth
+*.tar.gz
+*.DS_Store
+*.gif
