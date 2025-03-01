@@ -148,6 +148,12 @@ def parse_args(argv):
         default=1e-3,
         help="Learning rate (default: %(default)s)",
     )
+    parser.add_argument('--n', type=int, default=3000, help="Number of samples (default: 3000)")
+    parser.add_argument('--output_for', type=str, default='test', help="Output directory or file name (default: 'test')")
+    parser.add_argument('--plot_original', type=bool, default=True, help="Whether to plot the original images (default: True)")
+    parser.add_argument('--scaling_factor', type=float, default=0.5, help="Scaling factor for resizing (default: 0.5)")
+    parser.add_argument('--crop', type=bool, default=True, help="Whether to crop the images (default: True)")
+    parser.add_argument('--out_video_path', type=str, default='output_video.mp4', help="video path output")
     args = parser.parse_args(argv)
     return args
 

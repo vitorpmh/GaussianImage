@@ -2,12 +2,12 @@ import pygame
 import sys
 import numpy as np
 
-def pygame_interface():
+def pygame_interface(img_path):
     # Initialize pygame
     pygame.init()
 
     # Load an image
-    image_path = "/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/001_03_fitting_0.99.png"  # Replace with your image file path
+    image_path = img_path  # Replace with your image file path
     image = pygame.image.load(image_path)
 
     # Get image dimensions

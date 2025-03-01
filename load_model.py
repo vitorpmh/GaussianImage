@@ -1,3 +1,10 @@
+
+from train import  parse_args,SimpleTrainer2d
+from ifmorph.diff_operators import jacobian
+import torch.nn as nn
+from ifmorph.util import warp_points
+from ifmorph.model import from_pth
+from copy import deepcopy
 from tqdm import tqdm
 from gaussianimage_rs import GaussianImage_RS
 from gsplat import project_gaussians_2d_scale_rot
@@ -54,31 +61,31 @@ H, W = gt_image.shape[2], gt_image.shape[3]
 #     quantize=False).to(device)
 
 
-gaussian_model = GaussianImage_RS(
-    loss_type="L2", 
-    opt_type="adan", 
-    num_points=num_points, 
-    H=H, 
-    W=W, 
-    BLOCK_H=BLOCK_H, 
-    BLOCK_W=BLOCK_W, 
-    device=device, 
-    lr=1e-3, 
-    quantize=False).to(device)
+# gaussian_model = GaussianImage_RS(
+#     loss_type="L2", 
+#     opt_type="adan", 
+#     num_points=num_points, 
+#     H=H, 
+#     W=W, 
+#     BLOCK_H=BLOCK_H, 
+#     BLOCK_W=BLOCK_W, 
+#     device=device, 
+#     lr=1e-3, 
+#     quantize=False).to(device)
 
 
-print(f"loading model path:{model_path}")
-checkpoint = torch.load(model_path, map_location=device)
-model_dict = gaussian_model.state_dict()
-pretrained_dict = {k: v for k, v in checkpoint.items() if k in model_dict}
-model_dict.update(pretrained_dict)
-gaussian_model.load_state_dict(model_dict)
+# print(f"loading model path:{model_path}")
+# checkpoint = torch.load(model_path, map_location=device)
+# model_dict = gaussian_model.state_dict()
+# pretrained_dict = {k: v for k, v in checkpoint.items() if k in model_dict}
+# model_dict.update(pretrained_dict)
+# gaussian_model.load_state_dict(model_dict)
 
 
-gaussian_model.eval()
-with torch.no_grad():
-    out = gaussian_model()
-    out_rgb = rearrange(out['render'], '1 c h w -> h w c').cpu().numpy()
+# gaussian_model.eval()
+# with torch.no_grad():
+#     out = gaussian_model()
+#     out_rgb = rearrange(out['render'], '1 c h w -> h w c').cpu().numpy()
     
 
 
@@ -362,25 +369,13 @@ def save_ply(path):
     el = PlyElement.describe(elements, 'vertex')
     PlyData([el]).write(path)
 
-# save_ply('/home/vitor/Documents/IMPA/gaussian-splatting/output/test/point_cloud/iteration_7000/point_cloud.ply')
-
-
-
-
-
-
-
-
-
-
-
-
 
 def plot_conics_matplotlib(
     gaussian_model, 
     crop = False,
     square = None,
     plot_original = True,
+    original_path = None,
     amount_to_plot = 1000 , 
     scaling_factor=2,
     filepath="gaussian_projections.png",
@@ -397,7 +392,8 @@ def plot_conics_matplotlib(
             gaussian_model.H, 
             gaussian_model.W, 
             gaussian_model.tile_bounds)
-    original_image_path = filepath.split('video')[0] + f"001_03_fitting_0.{filepath.split('gaussian_model')[1][2:4]}.png"
+    if plot_original:
+        original_image_path = original_path + f'morph_0.{int(filepath.split("_")[-1][:-4]):02d}.png'
     
 
     os.makedirs('/'.join(filepath.split('/')[:-1]), exist_ok=True)
@@ -417,26 +413,12 @@ def plot_conics_matplotlib(
         plt.axis('off')
     else:
         fig, ax = plt.subplots(1,1,figsize=(figsize[0] / 100, figsize[1] / 100), dpi=300)
-    
+        if crop:
+            x_min, y_min = square[0]  # top-left
+            x_max, y_max = square[1]  # bottom-right
     
 
 
-
-    # out_img = rasterize_gaussians_sum(
-    #     xys[:amount_to_plot], 
-    #     depths[:amount_to_plot], 
-    #     radii[:amount_to_plot], 
-    #     conics[:amount_to_plot], 
-    #     num_tiles_hit,
-    #     gaussian_model.get_features[:amount_to_plot], 
-    #     gaussian_model.get_opacity[:amount_to_plot], 
-    #     gaussian_model.H, 
-    #     gaussian_model.W, 
-    #     gaussian_model.BLOCK_H, 
-    #     gaussian_model.BLOCK_W, 
-    #     background=gaussian_model.background, 
-    #     return_alpha=False)
-    
     with torch.no_grad():
         pix_coord = torch.stack(torch.meshgrid(torch.arange(gaussian_model.W), torch.arange(gaussian_model.H), indexing='xy'), dim=-1).to(xys.device)
         
@@ -496,178 +478,97 @@ def plot_conics_matplotlib(
     plt.close(fig)  # Close the figure to free memory
 
 
-
-    # H = gaussian_model.H  
-    # W = gaussian_model.W  
-    # with torch.no_grad():
-        # gaussian_model.eval()
-        # rgb = gaussian_model.get_features
-        # sorted_means2D = gaussian_model.get_xyz
-        # opacity = gaussian_model.get_opacity
-        # sorted_color = rgb
-        #dx = (torch.round(xys[:,None,:]) - sorted_means2D[None,:]) # B P 2
-
-        # gauss_weight = torch.exp(-0.5 * (
-        #     dx[:, :, 0]**2 * conics[:, 0] 
-        #     + dx[:, :, 1]**2 * conics[:, 2]
-        #     + 2 * dx[:,:,0]*dx[:,:,1] * conics[:, 1]))
-
-        # gauss_weight = torch.exp(-0.5 * (conics[:, 0] + conics[:, 2]+ conics[:, 1]))
-
-        # gauss_weight = torch.exp(-0.5 * (
-        #     sorted_means2D[:, :, 0]**2 * conics[:, 0] 
-        #     + sorted_means2D[:, :, 1]**2 * conics[:, 2]
-        #     + 2 * sorted_means2D[:,:,0]*sorted_means2D[:,:,1] * conics[:, 1]))
-
-        # alpha = (gauss_weight[..., None] * opacity[None]).clip(max=0.999) # B P 1
-        # tile_color = (alpha * sorted_color[None])#.sum(dim=1)
-
     
-    
-    # with only sh2rgb
-    # rgb = SH2RGB() * 255
+def main(argv):
+    args = parse_args(argv)
+
+    img_path = "/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/001_03_fitting_0.99.png"
+    img_path = '/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/morph_0.61.png'
+    selected_indices = pygame_interface(img_path)
 
 
-    # with eval_sh
-    # rgb = eval_sh(
-    #     0, 
-    #     rgb.view(-1,3,1), 
-    #     torch.ones_like(gaussian_model.get_xyz) # gaussian_model.get_xyz/gaussian_model.get_xyz.norm(dim=1, keepdim=True)
-    # ) * 255
-    # rgb = SH2RGB(rgb) * 255
-    # rgb = torch.clamp_min(rgb + 0.5, 0.0) * 255
-    
-    
-    # # Normalize features to RGB
-    # min_ = rgb.min()
-    # max_ = rgb.max()
-    # #print(min_,max_)
-    # #rgb = torch.floor(((rgb - min_) / (max_ - min_)) * 255)
-    
-    # rgb = torch.round(torch.sigmoid(rgb) * 255) 
-    
-    # simple clamping...
-    # rgb = rgb.clamp(0,1) * 255
-    # rgb = rgb.detach().cpu().numpy().astype(np.uint8)
-
-    
-
-    
-    # plt.subplot(1,3,3)
-    # for i, (xy,  conic, color) in enumerate(zip(xys,  conics, rgb)):
-    #     if i >= amount_to_plot:
-    #         break
-
-    #     # Get center (x, y) and conic parameters [A, B, C]
-    #     mu_x, mu_y = xy.detach().cpu().numpy()  # Gaussian center
-    #     A, B, C = conic.detach().cpu().numpy()  # Conic parameters
-
-    #     # Compute the semi-major and semi-minor axes using the conic equation
-    #     conic_matrix = np.array([[A, B], [B, C]])
-    #     eigvals, eigvecs = np.linalg.eig(conic_matrix)
-
-    #     semi_major = np.sqrt(1 / eigvals[0]) * scaling_factor  # Larger axis
-    #     semi_minor = np.sqrt(1 / eigvals[1]) * scaling_factor # Smaller axis
-
-    #     # Ellipse orientation (rotation angle)
-    #     angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
-
-    #     # Create points for the ellipse
-    #     theta = np.linspace(0, 2 * np.pi, 100)
-    #     x_ellipse = semi_major * np.cos(theta)
-    #     y_ellipse = semi_minor * np.sin(theta)
-
-    #     # Rotate the ellipse based on the orientation angle
-    #     x_rot = x_ellipse * np.cos(angle) - y_ellipse * np.sin(angle)
-    #     y_rot = x_ellipse * np.sin(angle) + y_ellipse * np.cos(angle)
-
-    #     # Translate the ellipse to its center (mu_x, mu_y)
-    #     x_final = mu_x + x_rot
-    #     y_final = mu_y + y_rot
-
-    #     r, g, b = color
-    #     ax[2].fill(x_final, y_final, color=(r / 255, g / 255, b / 255, 1), edgecolor=(r / 255, g / 255, b / 255), linewidth=1)
-
-    # ax[2].set_title("2D Gaussian Projections on HxW Grid")
-    # ax[2].set_xlim(0, W)
-    # ax[2].set_ylim(H, 0)  # Reverse y-axis for image coordinates
-    # ax[2].set_xlabel("X")
-    # ax[2].set_ylabel("Y")
-    # ax[2].set_aspect(1)
-    
-    
+    square = selected_indices
 
 
+    save = '/home/vitor/Documents/doc/GaussianImage/videos/'
+    os.makedirs(save, exist_ok=True)
 
-selected_indices = pygame_interface()
+    image_path_0 = '/home/vitor/Documents/doc/GaussianImage/dataset/neutral_front/001_03.jpg'
+    image_path_1 = '/home/vitor/Documents/doc/GaussianImage/dataset/neutral_front/002_03.jpg'
 
+    model_path_0 = '/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/gaussian_model.pth.tar'
+    model_path_1 = '/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/002_03/gaussian_model.pth.tar'
 
-import argparse
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Your script description")
-
-    parser.add_argument('--n', type=int, default=3000, help="Number of samples (default: 3000)")
-    parser.add_argument('--output_for', type=str, default='test', help="Output directory or file name (default: 'test')")
-    parser.add_argument('--plot_original', type=bool, default=True, help="Whether to plot the original images (default: True)")
-    parser.add_argument('--scaling_factor', type=float, default=0.5, help="Scaling factor for resizing (default: 0.5)")
-    parser.add_argument('--crop', type=bool, default=True, help="Whether to crop the images (default: True)")
-    parser.add_argument('--out_video_path', type=str, default='output_video.mp4', help="video path output")
-
-    return parser.parse_args()
-
-args = parse_args()
-
-n = args.n
-output_for = args.output_for
-plot_original = args.plot_original
-scaling_factor = args.scaling_factor
-crop = args.crop
-output_video_path = args.out_video_path
-print(f"n: {n}, output_for: {output_for}, plot_original: {plot_original}, scaling_factor: {scaling_factor}, crop: {crop}")
-
-square = selected_indices
-
-
-save = '/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/video/'
-path = '/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/'
-paths = os.listdir(path)
-paths = [
-    path for path in paths 
-    if path.endswith(".pth.tar") and path != "gaussian_model.pth.tar"
-]
-for model in tqdm(paths,total=len(paths)):
-    with torch.no_grad():
-        gaussian_model = GaussianImage_RS(
-            loss_type="L2", 
-            opt_type="adan", 
-            num_points=num_points, 
-            H=H, 
-            W=W, 
-            BLOCK_H=BLOCK_H, 
-            BLOCK_W=BLOCK_W, 
-            device=device, 
-            lr=1e-3, 
-            quantize=False).to(device)
-
-        checkpoint = torch.load(path+model, map_location=device)
-        gaussian_model.load_state_dict(checkpoint)
-
-
-
-        plot_conics_matplotlib(
-            gaussian_model,
-            crop=crop,
-            square=square,
-            plot_original = plot_original,
-            scaling_factor= scaling_factor,
-            amount_to_plot=n,
-            filepath=save+f'/{n}_{output_for}/'+model[:-8].replace('.','')+f'_{n}.png',
-            figsize = (1080,1920),
-            dpi = 300)
+    trainer_0 = SimpleTrainer2d(image_path=image_path_0, num_points=30000, iterations=50000, model_name='GaussianImage_RS', args=args, model_path=model_path_0)
+    trainer_1 = SimpleTrainer2d(image_path=image_path_1, num_points=30000, iterations=50000, model_name='GaussianImage_RS', args=args, model_path=model_path_1)
         
 
+    warp_net = from_pth("/home/vitor/Documents/doc/GaussianImage/warping_models/weights.pth", w0=1, ww=1, device=device)
+    morphed_trainer = deepcopy(trainer_0)
 
-generate_video(save,n,output_for,output_video_path=output_video_path)
+    t1 = 0
+    t2 = 1
+    n_frames = 100
+    times = np.arange(t1, t2, (t2 - t1) / n_frames)
 
-##  python load_model.py --n 4000 --output_for "top_hair" --plot_original True --scaling_factor 0.5 --crop True --out_video_path top_hair.mp4
+    for idx,t in enumerate(times):
+        warp_net = warp_net.eval()
+        wpoints, coords = warp_points(warp_net, trainer_0.gaussian_model.get_xyz[:, [1, 0]], t)
+        jac = jacobian(wpoints.unsqueeze(0), coords)[0].squeeze(0)
+        s = torch.linalg.norm(jac, dim=1)[:, [1, 0]]
+        #s, _ = s.max(dim=1, keepdim=True)
+        s = s.mean(dim=1, keepdim=True)
+        u = jac[:, :, 0]
+        theta = torch.atan2(u[:, 1], u[:, 0]).unsqueeze(-1)
+        xyz_0 = torch.atanh(wpoints[:, [1, 0]])
+        opacity_0 = trainer_0.gaussian_model.get_opacity * (1 - t)
+        scaling_inc_0 = s
+        rotation_inc_0 = theta
+
+        wpoints, coords = warp_points(warp_net, trainer_1.gaussian_model.get_xyz[:, [1, 0]], t - 1)
+        jac = jacobian(wpoints.unsqueeze(0), coords)[0].squeeze(0)
+        s = torch.linalg.norm(jac, dim=1)[:, [1, 0]]
+        #s, _ = s.max(dim=1, keepdim=True)
+        s = s.mean(dim=1, keepdim=True)
+        u = jac[:, :, 0]
+        theta = torch.atan2(u[:, 1], u[:, 0]).unsqueeze(-1)
+        xyz_1 = torch.atanh(wpoints[:, [1, 0]])
+        opacity_1 = trainer_1.gaussian_model.get_opacity * t
+        scaling_inc_1 = s
+        rotation_inc_1 = theta
+
+        morphed_trainer.gaussian_model._xyz = nn.Parameter(torch.cat((xyz_0, xyz_1)))
+        morphed_trainer.gaussian_model._opacity = torch.cat((opacity_0, opacity_1))
+        morphed_trainer.gaussian_model._scaling = nn.Parameter(torch.cat((trainer_0.gaussian_model._scaling, trainer_1.gaussian_model._scaling)))
+        morphed_trainer.gaussian_model._rotation = nn.Parameter(torch.cat((trainer_0.gaussian_model._rotation, trainer_1.gaussian_model._rotation)))
+        morphed_trainer.gaussian_model._features_dc = nn.Parameter(torch.cat((trainer_0.gaussian_model._features_dc, trainer_1.gaussian_model._features_dc)))
+        morphed_trainer.gaussian_model.scaling_inc = nn.Parameter(torch.cat((scaling_inc_0, scaling_inc_1)))
+        #morphed_trainer.rotation_inc = nn.Parameter(torch.cat((rotation_inc_0, rotation_inc_1)))
+        #morphed_trainer.scaling_inc = nn.Parameter(torch.cat((torch.ones_like(scaling_inc_0), torch.ones_like(scaling_inc_1))))
+        morphed_trainer.gaussian_model.rotation_inc = nn.Parameter(torch.cat((torch.zeros_like(rotation_inc_0), torch.zeros_like(rotation_inc_1))))
+
+        
+        
+        
+        # plot_conics_matplotlib(
+        #     morphed_trainer.gaussian_model,
+        #     crop=args.crop,
+        #     square=square,
+        #     scaling_factor= args.scaling_factor,
+        #     amount_to_plot=args.n,
+        #     filepath=save+f'/{args.n}_{args.output_for}/'+f'test_{idx}.png',
+        #     plot_original = True,
+        #     original_path='/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/',
+        #     figsize = (1080,1920),
+        #     dpi = 300)
+
+
+    generate_video(save,args.n,args.output_for,output_video_path=args.out_video_path)
+
+    ##  python load_model.py --n 4000 --output_for "top_hair" --plot_original True --scaling_factor 0.5 --crop True --out_video_path top_hair.mp4
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+    # args = parse_args(sys.argv[1:])
+    # save = '/home/vitor/Documents/doc/GaussianImage/videos/'
+    # generate_video(save,args.n,args.output_for,output_video_path=args.out_video_path)
