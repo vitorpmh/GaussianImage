@@ -550,17 +550,17 @@ def main(argv):
         
         
         
-        # plot_conics_matplotlib(
-        #     morphed_trainer.gaussian_model,
-        #     crop=args.crop,
-        #     square=square,
-        #     scaling_factor= args.scaling_factor,
-        #     amount_to_plot=args.n,
-        #     filepath=save+f'/{args.n}_{args.output_for}/'+f'test_{idx}.png',
-        #     plot_original = True,
-        #     original_path='/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/',
-        #     figsize = (1080,1920),
-        #     dpi = 300)
+        plot_conics_matplotlib(
+            morphed_trainer.gaussian_model,
+            crop=args.crop,
+            square=square,
+            scaling_factor= args.scaling_factor,
+            amount_to_plot=args.n,
+            filepath=save+f'/{args.n}_{args.output_for}/'+f'test_{idx}.png',
+            plot_original = True,
+            original_path='/home/vitor/Documents/doc/GaussianImage/checkpoints/frll_neutral_front/GaussianImage_RS_50000_30000/001_03/',
+            figsize = (1080,1920),
+            dpi = 300)
 
 
     generate_video(save,args.n,args.output_for,output_video_path=args.out_video_path)

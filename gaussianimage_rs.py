@@ -24,7 +24,8 @@ class GaussianImage_RS(nn.Module):
         self.device = kwargs["device"]
 
         self._xyz = nn.Parameter(torch.atanh(2 * (torch.rand(self.init_num_points, 2) - 0.5)))
-        self._scaling = nn.Parameter(torch.rand(self.init_num_points, 2))
+        #self._scaling = nn.Parameter(torch.rand(self.init_num_points, 2))
+        self._scaling = nn.Parameter(torch.rand(self.init_num_points, 1))
         self.register_buffer('_opacity', torch.ones((self.init_num_points, 1)))
         self._rotation = nn.Parameter(torch.rand(self.init_num_points, 1))
         self._features_dc = nn.Parameter(torch.rand(self.init_num_points, 3))
@@ -40,7 +41,7 @@ class GaussianImage_RS(nn.Module):
         if self.quantize:
             self.xyz_quantizer = FakeQuantizationHalf.apply 
             self.features_dc_quantizer = VectorQuantizer(codebook_dim=3, codebook_size=8, num_quantizers=2, vector_type="vector", kmeans_iters=5) 
-            self.scaling_quantizer = UniformQuantizer(signed=False, bits=6, learned=True, num_channels=2) 
+            self.scaling_quantizer = UniformQuantizer(signed=False, bits=6, learned=True, num_channels=2)
             self.rotation_quantizer = UniformQuantizer(signed=False, bits=6, learned=True, num_channels=1)
 
         if kwargs["opt_type"] == "adam":
@@ -50,12 +51,14 @@ class GaussianImage_RS(nn.Module):
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=20000, gamma=0.5)
 
     def _init_data(self):
-        self.scaling_quantizer._init_data(self._scaling)
+        #self.scaling_quantizer._init_data(self._scaling)
+        self.scaling_quantizer._init_data(self._scaling.repeat(1, 2))
         self.rotation_quantizer._init_data(self.get_rotation)
 
     @property
     def get_scaling(self):
-        return torch.abs(self._scaling+self.bound)
+        #return torch.abs(self._scaling+self.bound)
+        return torch.abs(self._scaling.repeat(1, 2)+self.bound)
     
     @property
     def get_rotation(self):
@@ -100,7 +103,8 @@ class GaussianImage_RS(nn.Module):
     def forward_quantize(self):
         l_vqm, m_bit = 0, 16*self.init_num_points*2
         means = torch.tanh(self.xyz_quantizer(self._xyz))
-        scaling, l_vqs, s_bit = self.scaling_quantizer(self._scaling)
+        #scaling, l_vqs, s_bit = self.scaling_quantizer(self._scaling)
+        scaling, l_vqs, s_bit = self.scaling_quantizer(self._scaling.repeat(1, 2))
         scaling = torch.abs(scaling + self.bound)
         rotation, l_vqr, r_bit = self.rotation_quantizer(self.get_rotation)
         colors, l_vqc, c_bit = self.features_dc_quantizer(self.get_features)
@@ -127,7 +131,9 @@ class GaussianImage_RS(nn.Module):
 
     def compress_wo_ec(self):
         means = torch.tanh(self.xyz_quantizer(self._xyz))
-        quant_scaling, _ = self.scaling_quantizer.compress(self._scaling)
+        #quant_scaling, _ = self.scaling_quantizer.compress(self._scaling)
+        quant_scaling, _ = self.scaling_quantizer.compress(self._scaling.repeat(1, 2))
+        quant_scaling = quant_scaling.repeat(1, 2)
         quant_rotation, _ = self.rotation_quantizer.compress(self.get_rotation)
         _, feature_dc_index = self.features_dc_quantizer.compress(self.get_features)
         return {"xyz":self._xyz.half(), "feature_dc_index": feature_dc_index, "quant_scaling": quant_scaling, "quant_rotation": quant_rotation}
@@ -196,7 +202,8 @@ class GaussianImage_RS(nn.Module):
 
     def compress(self):
         means = torch.tanh(self.xyz_quantizer(self._xyz))
-        _, scaling_index = self.scaling_quantizer.compress(self._scaling)
+        #_, scaling_index = self.scaling_quantizer.compress(self._scaling)
+        _, scaling_index = self.scaling_quantizer.compress(self._scaling.repeat(1, 2))
         _, rotation_index = self.rotation_quantizer.compress(self.get_rotation)
         _, feature_dc_index = self.features_dc_quantizer.compress(self.get_features)
         return {"xyz":self._xyz.half(), "feature_dc_index": feature_dc_index, "scaling_index": scaling_index, "rotation_index": rotation_index}
@@ -274,3 +281,4 @@ class GaussianImage_RS(nn.Module):
         return {"bpp": bpp, "position_bpp": position_bpp, 
             "cholesky_bpp": cholesky_bpp, "feature_dc_bpp": feature_dc_bpp, "scaling_bpp": scaling_bpp,
             "rotation_bpp": rotation_bpp}
+

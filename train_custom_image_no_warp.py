@@ -16,7 +16,7 @@ def main(argv):
         torch.backends.cudnn.benchmark = False
         np.random.seed(args.seed)
 
-    image_path = Path(args.dataset) / '002_03.jpg'
+    image_path = Path(args.dataset) / '001_03.jpg'
     
     trainer = SimpleTrainer2d(image_path=image_path, num_points=args.num_points, iterations=args.iterations, model_name=args.model_name, args=args, model_path=args.model_path)
 
